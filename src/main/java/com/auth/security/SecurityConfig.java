@@ -8,11 +8,10 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AuthenticationFailureHandler;
-import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 
 import com.auth.service.LoginAttemptService;
 
@@ -20,63 +19,41 @@ import com.auth.service.LoginAttemptService;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    private final UserDetailsService userDetailsService;
-    private final LoginAttemptService loginAttemptService;
+	private final UserDetailsService userDetailsService;
+	private final LoginAttemptService loginAttemptService;
 
-    public SecurityConfig(UserDetailsService userDetailsService, LoginAttemptService loginAttemptService) {
-        this.userDetailsService = userDetailsService;
-        this.loginAttemptService = loginAttemptService;
-    }
+	public SecurityConfig(UserDetailsService userDetailsService, LoginAttemptService loginAttemptService) {
+		this.userDetailsService = userDetailsService;
+		this.loginAttemptService = loginAttemptService;
+	}
 
-    @Bean
-    public BCryptPasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+	@Bean
+	public BCryptPasswordEncoder passwordEncoder() {
+		return new BCryptPasswordEncoder();
+	}
 
-    @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
-        return authenticationConfiguration.getAuthenticationManager();
-    }
+	@Bean
+	public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration)
+			throws Exception {
+		return authenticationConfiguration.getAuthenticationManager();
+	}
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http
-            .csrf(csrf -> csrf.disable()) // Disable CSRF for simplicity (not recommended for production)
-            .cors(cors -> cors.disable()) // Disable CORS as it's not necessary for JSP pages
-            .authorizeHttpRequests(auth -> auth
-            		.requestMatchers("/api/**").permitAll()
-                .requestMatchers("/login", "/register", "/home", "/logout", "/login.jsp", "/register.jsp", "/css/**", "/js/**").permitAll() // Allow access to these pages without authentication
-                .anyRequest().authenticated() // All other pages require authentication
-            )
-            .formLogin(form -> form
-                .loginPage("/login") // The login page URL
-                .loginProcessingUrl("/login")  // Action URL for the login form (should match the form action in your JSP)
-                .defaultSuccessUrl("/home.jsp", true)  // Redirect to home.jsp upon successful login
-                .failureUrl("/login.jsp?error=true") // Redirect to login.jsp on failure
-                .permitAll()
-            )
-            .logout(logout -> logout
-                .logoutUrl("/logout")
-                .logoutSuccessUrl("/login?logout=true") // Redirect to login page after logout
-                .permitAll()
-            );
+	@Bean
+	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+		http.csrf(csrf -> csrf.disable()) // Disable CSRF if using stateless API
+				.cors(cors -> cors.configurationSource(request -> {
+					var corsConfig = new org.springframework.web.cors.CorsConfiguration();
+					corsConfig.setAllowedOrigins(List.of("http://localhost:4200")); // Angular frontend URL
+					corsConfig.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+					corsConfig.setAllowedHeaders(List.of("*"));
+					corsConfig.setAllowCredentials(true);
+					return corsConfig;
+				})).authorizeHttpRequests(auth -> auth.requestMatchers("/api/register", "/api/login","/api/unlock")
+						.permitAll()
+						.anyRequest().authenticated() 
+				).sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS) 
+				).httpBasic();
 
-        return http.build();
-    }
-
-    @Bean
-    public AuthenticationSuccessHandler successHandler() {
-        return (request, response, authentication) -> {
-            loginAttemptService.resetFailedAttempts(authentication.getName());
-            response.sendRedirect("/home.jsp");
-        };
-    }
-
-    @Bean
-    public AuthenticationFailureHandler failureHandler() {
-        return (request, response, exception) -> {
-            loginAttemptService.loginFailed(request.getParameter("username"));
-            response.sendRedirect("/login.jsp?error=true");
-        };
-    }
+		return http.build();
+	}
 }

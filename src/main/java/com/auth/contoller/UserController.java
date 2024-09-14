@@ -26,19 +26,21 @@ public class UserController {
 
     // Handle user registration via JSON (RESTful API)
     @PostMapping("/register")
-    public ResponseEntity<Map<String, Object>> registerUser(@RequestBody UserRegistrationDto registrationDto) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<Map<String, String>> registerUser(@RequestBody UserRegistrationDto registrationDto) {
+        Map<String, String> response = new HashMap<>();
 
         // Validate that passwords match
         if (!registrationDto.getPassword().equals(registrationDto.getConfirmPassword())) {
-            response.put("error", "Passwords do not match.");
+            response.put("success", "false");
+            response.put("message", "Passwords do not match.");
             return ResponseEntity.badRequest().body(response);
         }
 
         // Check if the username already exists
         Optional<User> existingUser = userService.findUserByUsername(registrationDto.getUsername());
         if (existingUser.isPresent()) {
-            response.put("error", "Username already exists.");
+            response.put("success", "false");
+            response.put("message", "Username already exists.");
             return ResponseEntity.badRequest().body(response);
         }
 
@@ -52,6 +54,7 @@ public class UserController {
 
         userService.saveUser(newUser);
 
+        response.put("success", "true");
         response.put("message", "User registered successfully.");
         return ResponseEntity.ok(response);
     }
@@ -67,32 +70,40 @@ public class UserController {
         if (userOptional.isPresent()) {
             User user = userOptional.get();
 
+            // Check if the account is locked
             if (!user.isAccountNonLocked()) {
-                response.put("error", "Account is locked.");
-                return ResponseEntity.badRequest().body(response);
+                response.put("success", "false");
+                response.put("isLocked", true);
+                response.put("message", "Account is locked.");
+                return ResponseEntity.ok().body(response);
             }
 
             // Verify the password
             if (passwordEncoder.matches(password, user.getPassword())) {
                 userService.resetFailedAttempts(user);
+                response.put("success", "true");
                 response.put("message", "Login successful!");
                 return ResponseEntity.ok(response);
             } else {
                 userService.increaseFailedAttempts(user);
-                response.put("error", "Invalid password.");
+                response.put("success", "false");
+                response.put("isLocked", false);
+                response.put("message", "Invalid credentials.");
                 return ResponseEntity.badRequest().body(response);
             }
         } else {
-            response.put("error", "User not found.");
+            response.put("success", "false");
+            response.put("isLocked", false);
+            response.put("message", "User not found.");
             return ResponseEntity.badRequest().body(response);
         }
     }
 
     // Unlock the account via JSON (RESTful API)
     @PostMapping("/unlock")
-    public ResponseEntity<Map<String, Object>> unlockAccount(@RequestBody Map<String, String> unlockRequest) {
+    public ResponseEntity<Map<String, String>> unlockAccount(@RequestBody Map<String, String> unlockRequest) {
         String username = unlockRequest.get("username");
-        Map<String, Object> response = new HashMap<>();
+        Map<String, String> response = new HashMap<>();
 
         Optional<User> userOptional = userService.findUserByUsername(username);
         if (userOptional.isPresent()) {
@@ -101,15 +112,27 @@ public class UserController {
             // Check if the account can be unlocked (after 15 minutes)
             if (user.getLockTime() != null && user.getLockTime().isBefore(LocalDateTime.now().minusMinutes(15))) {
                 userService.unlockAccount(user);
+                response.put("success", "true");
                 response.put("message", "Account unlocked.");
                 return ResponseEntity.ok(response);
             } else {
-                response.put("error", "Account cannot be unlocked yet.");
+                response.put("success", "false");
+                response.put("message", "Account cannot be unlocked yet.");
                 return ResponseEntity.badRequest().body(response);
             }
         } else {
-            response.put("error", "User not found.");
+            response.put("success", "false");
+            response.put("message", "User not found.");
             return ResponseEntity.badRequest().body(response);
         }
+    }
+
+    // Handle user logout via JSON (RESTful API)
+    @PostMapping("/logout")
+    public ResponseEntity<Map<String, String>> logout() {
+        Map<String, String> response = new HashMap<>();
+        response.put("success", "true");
+        response.put("message", "Logout successful.");
+        return ResponseEntity.ok(response);
     }
 }
