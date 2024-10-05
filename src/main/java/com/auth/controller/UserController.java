@@ -1,28 +1,31 @@
-package com.auth.contoller;
+package com.auth.controller;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import com.auth.dto.UserRegistrationDto;
 import com.auth.model.User;
 import com.auth.service.UserService;
 
+import lombok.RequiredArgsConstructor;
+
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/api")
 public class UserController {
 
-    @Autowired
-    private UserService userService;
-
-    @Autowired
-    private BCryptPasswordEncoder passwordEncoder;
+    private final UserService userService;
+    private final PasswordEncoder passwordEncoder;
 
     // Handle user registration via JSON (RESTful API)
     @PostMapping("/register")
@@ -37,7 +40,7 @@ public class UserController {
         }
 
         // Check if the username already exists
-        Optional<User> existingUser = userService.findUserByUsername(registrationDto.getUsername());
+        Optional<User> existingUser = (userService.findUserByUsername(registrationDto.getUsername()));
         if (existingUser.isPresent()) {
             response.put("success", "false");
             response.put("message", "Username already exists.");
@@ -59,55 +62,15 @@ public class UserController {
         return ResponseEntity.ok(response);
     }
 
-    // Handle user login via JSON (RESTful API)
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, Object>> login(@RequestBody Map<String, String> loginRequest) {
-        String username = loginRequest.get("username");
-        String password = loginRequest.get("password");
-        Map<String, Object> response = new HashMap<>();
-
-        Optional<User> userOptional = userService.findUserByUsername(username);
-        if (userOptional.isPresent()) {
-            User user = userOptional.get();
-
-            // Check if the account is locked
-            if (!user.isAccountNonLocked()) {
-                response.put("success", "false");
-                response.put("isLocked", true);
-                response.put("message", "Account is locked.");
-                return ResponseEntity.ok().body(response);
-            }
-
-            // Verify the password
-            if (passwordEncoder.matches(password, user.getPassword())) {
-                userService.resetFailedAttempts(user);
-                response.put("success", "true");
-                response.put("message", "Login successful!");
-                return ResponseEntity.ok(response);
-            } else {
-                userService.increaseFailedAttempts(user);
-                response.put("success", "false");
-                response.put("isLocked", false);
-                response.put("message", "Invalid credentials.");
-                return ResponseEntity.badRequest().body(response);
-            }
-        } else {
-            response.put("success", "false");
-            response.put("isLocked", false);
-            response.put("message", "User not found.");
-            return ResponseEntity.badRequest().body(response);
-        }
-    }
-
     // Unlock the account via JSON (RESTful API)
     @PostMapping("/unlock")
     public ResponseEntity<Map<String, String>> unlockAccount(@RequestBody Map<String, String> unlockRequest) {
         String username = unlockRequest.get("username");
         Map<String, String> response = new HashMap<>();
 
-        Optional<User> userOptional = userService.findUserByUsername(username);
+        Optional<User> userOptional = (userService.findUserByUsername(username));
         if (userOptional.isPresent()) {
-            User user = userOptional.get();
+            User user = (User) userOptional.get();
 
             // Check if the account can be unlocked (after 15 minutes)
             if (user.getLockTime() != null && user.getLockTime().isBefore(LocalDateTime.now().minusMinutes(15))) {

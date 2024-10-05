@@ -3,6 +3,7 @@ package com.auth.service;
 import com.auth.model.User;
 import com.auth.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -19,7 +20,7 @@ public class UserService {
     }
 
     public Optional<User> findUserByUsername(String username) {
-        return Optional.ofNullable(userRepository.findByUsername(username));
+        return userRepository.findByUsername(username);
     }
 
     public void increaseFailedAttempts(User user) {
